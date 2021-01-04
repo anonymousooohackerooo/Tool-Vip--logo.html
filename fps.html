@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Page Title</title>
+            <script>
+
+    </script>
+    </head>
+    <body>
+    <canvas></canvas>   
+    <div id="alertDom">You Lost
+    <div id="restart" onClick="RestartGame()">restart</div>
+    </div>
+    </body>
+</html>
+
+
+
+<script>
+
+// Created by ᠌᠌brains
+
+
+
+"use strict";
+var canvas, ctx, camera, alertDom;
+var event = {};
+var ongoingTouches = [];
+var player, enemies = [];
+var initEnemies, initMap;
+var joystick, joystick2,pickUps=[];
+var map = [],mapsheet, switchButton;
+var explosionImg, explosions = [],missileImg;
+var gamePlay = true,killCount = 0,
+    gameTimer = 0;
+var w = screen.width,
+    h = w * 1.35,
+    k = w / 320,
+    π = 2 * Math.PI;
+var imgResources = [
+  "https://opengameart.org/sites/default/files/survivor-idle_shotgun_0.png",
+  "https://opengameart.org/sites/default/files/preview_idle.gif",
+  "https://i.pinimg.com/originals/71/85/99/71859947b85b5c4911634fb2c8fd7694.png",
+  "http://pngimg.com/uploads/missile/missile_PNG50.png"
+];
+var processImg = function(url) {
+  var img = new Image();
+  img.src = url;
+  return img;
+}
+var editorUrl=
+"http://jsbeautifier.org/?without-codemirror";
+var HowToPlay;
+
+
+;(function() {
+  player = new PlayerClass(160, 1600);
+  joystick = new JoystickClass(260, 370, 35, 0);
+  joystick2 = new JoystickClass(140, 360,30, 1);
+  camera = new CameraClass(160, 300, 50);
+  switchButton = new SwitchClass(10, 370, 30);
+  explosionImg = processImg(imgResources[2]);
+  missileImg = processImg(imgResources[3]);
+  mapsheet = [
+    "..........",
+    ".**--*--*.",
+    ".*+*+****.",
+    ".-****+**.",
+    ".++**+*--.",
+    ".-*+**+-*.",
+    ".*****+++.",
+    ".-*+*****.",
+    ".*****+-*.",
+    ".-*+**+-*.",
+    ".********.",
+    ".--*+*+*-.",
+    ".+++***++.",
+    ".--******.",
+    ".***++**+.",
+    ".****+--*.",
+    ".--+*+++*.",
+    ".-+**--++.",
+    ".+++*****.",
+    ".****+-*+.",
+    ".***++**-.",
+    ".........."
+  ]
+
+
+  initMap = function(m) {
+    var t;
+    var s = 80;
+    var x = -s;
+    var y = -s;
+    for (var i in m) {
+      var ms = m[i];
+      y += s;
+      x = -s;
+      ms = ms.split("");
+      for (var k in ms) {
+        x += s;
+        map.push(new MapClass(x, y, ms[k], s));
+      }
+    }
+  }
+  initEnemies = function() {
+    for (var m in map) {
+      if (map[m].t !== "-") continue;
+      enemies.push(
+        new EnemeyClass(map[m].x + map[m].size / 2,
+          map[m].y + map[m].size / 2, m));
+    }
+  }
+  initMap(mapsheet);
+  initEnemies();
+  event.on = function(ev, func) {
+    window.addEventListener(ev, func);
+    return event;
+  }
+  resetTouch();
+
+
+
+
+})();
+
+function PlayerClass(x, y) {
+  this.size = 60 * k;
+  this.x = x * k;
+  this.y = y * k;
+  this.vx = 0;
+  this.vy = 0;
+  this.ang = π / 2;
+  this.speed = 1.4 * k;
+  this.bullets = [];
+  this.gunReload = 10;
+  this.canUseGun = true;
+  this.health = 100;
+  this.img = [processImg(imgResources[0]),
+    processImg(imgResources[1])
+  ];
+  this.imgState = 1;
+  this.render = function() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(π - this.ang + π / 4);
+    ctx.drawImage(this.img[this.imgState], -this.size * 0.4, -this.size * 0.6,
+      this.size, this.size);
+    ctx.restore();
+  }
+  this.renderHealth = function(x, y) {
+    ctx.font = "bold " + 15 * k + "px arial";
+    ctx.fillStyle = "black";
+    ctx.fillText("HP", x, y + 10 * k);
+    ctx.beginPath();
+    ctx.fillStyle = "white";
+    ctx.rect(x + 30 * k, y, 100 * k, 10 * k);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    if (this.health > 15)
+      ctx.fillStyle = "green";
+    else ctx.fillStyle = "red";
+    ctx.rect(x + 30 * k, y, this.health * k, 10 * k);
+    ctx.fill();
+  }
+  this.move = function() {
+    this.x += this.vx;
+    this.y += this.vy;
+  }
+  this.checkCollisions = function() {
+    for (var m in map) {
+      if (!IsOnScreen(map[m].x, map[m].y) ||
+        map[m].t == "*" || map[m].t == "-"
+      ) continue;
+      var cx = map[m].x + map[m].size / 2;
+      var cy = map[m].y + map[m].size / 2;
+      var sx = map[m].x + map[m].size + this.size / 2;
+      var sy = map[m].y + map[m].size + this.size / 2;
+      var test =
+        IsInRect(this,
+          map[m].x - this.size / 2, map[m].y - this.size / 2, sx, sy);
+      if (test) {
+        var ang = Ang(this.x, this.y, cx, cy) + π / 2;
+        this.x -= 
+        Math.sin(ang) * this.speed*2;
+        this.y -= 
+        Math.cos(ang) * this.speed*2;
+        break;
+      }
+    }
+    for (var e in enemies) {
+      var en = enemies[e]
+      if (!IsOnScreen(en.x, en.y) ||
+        !enemies[e].exist) continue;
+      var dist =
+        Dist(this.x, this.y, en.x, en.y);
+      if (dist < (this.size + en.size) * 0.7) {
+        var ang = Ang(this.x, this.y, en.x, en.y) + π / 2;
+        this.x -= 
+        Math.sin(ang) * this.speed*2;
+        this.y -= 
+        Math.cos(ang) * this.speed*2;
+        
+      }
+    }
+    for(var p in pickUps){
+    var en = pickUps[p]
+      if (!IsOnScreen(en.x, en.y)) continue;
+      var dist=Dist(this.x,this.y,en.x,en.y);
+      if(dist<this.size/2){
+        en.exist=false;
+        this.health+=10;
+        
+        break;
+      }
+    }
+  }
+  this.hit = function(power) {
+    this.health -= power;
+  }
+}
+
+
+function EnemeyClass(x, y, m) {
+  this.x = x;
+  this.y = y;
+  this.size = 30 * k;
+  this.sides = Rand(5, 9);
+  this.ang = 0;
+  this.refMap = m;
+  this.health = 50;
+  this.isInSight = false;
+  this.exist = true;
+  this.missiles = [];
+  this.timer = 0;
+  this.render = function() {
+    var s = this.size;
+    var sd = this.sides;
+    var w = 8 * k;
+    var h = w * 4;
+    ctx.beginPath();
+    ctx.fillStyle = "blue";
+    ctx.drawPolygon(this.x, this.y, s, sd);
+    ctx.fill();
+    ctx.stroke();
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.ang);
+    ctx.beginPath();
+    ctx.fillStyle = "#aaffaa"
+    ctx.rect(-w / 2, -h * 0, w, h);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.fillStyle = "#aaffaa"
+    ctx.drawPolygon(0, 0, s / 3, sd);
+    ctx.fill()
+    ctx.stroke();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.fillStyle = "white";
+    ctx.rect(this.x - this.size,
+      this.y + this.size + 10 * k,
+      50 * k, 10 * k);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    if (this.health > 15)
+      ctx.fillStyle = "green";
+    else ctx.fillStyle = "red";
+    ctx.rect(this.x - this.size,
+      this.y + this.size + 10 * k,
+      this.health * k, 10 * k);
+    ctx.fill();
+  }
+  this.checkSight = function() {
+    var dist1 =
+      Dist(this.x, this.y, player.x, player.y);
+    var ang1 =
+      Math.abs(Ang(this.x, this.y, player.x, player.y));
+    var lineBreak = false;
+    for (var m in map) {
+      if (!IsOnScreen(map[m].x, map[m].y) ||
+        map[m].t == "*" || map[m].t == "." || m == this.refMap
+      ) continue;
+      var mx = map[m].x + map[m].size / 2;
+      var my = map[m].y + map[m].size / 2;
+      var dist2 =
+        Dist(this.x, this.y, mx, my);
+      var distDiff = (40 * k) / (dist2);
+      if (dist1 < dist2) continue;
+      var ang2 =
+        Math.abs(Ang(this.x, this.y, mx, my));
+      var diff = Math.abs(ang2 - ang1);
+      if (diff < distDiff) {
+        lineBreak = true
+        break;
+      }
+    }
+    if (!lineBreak && this.missiles.length < 1)
+      this.isInSight = true;
+    else this.isInSight = false;
+  }
+}
+
+function BulletClass(x, y, ang, t) {
+  this.x = x;
+  this.y = y;
+  this.ang = ang;
+  this.speed = 6 * k;
+  this.size = 3 * k;
+  this.type = t;
+  this.exist = true;
+  this.move = function() {
+    this.x += Math.sin(this.ang) * this.speed;
+    this.y += Math.cos(this.ang) * this.speed;
+  }
+  this.render = function() {
+    if (this.type == 1) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(π - this.ang);
+      ctx.fillStyle = "black";
+      ctx.rect(-this.size / 2, -this.size * 1.5, this.size, this.size * 6)
+      ctx.fill();
+      ctx.restore();
+    } else if (this.type == 0) {
+      ctx.beginPath();
+      ctx.fillStyle = "red";
+      ctx.arc(this.x, this.y, 3 * k, 0, π);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+  this.checkCollisions = function() {
+    for (var m in map) {
+      if (!IsOnScreen(map[m].x, map[m].y) ||
+        map[m].t == "*" || map[m].t == "." || map[m].t == "-"
+      ) continue;
+      var spacing = 5 * k;
+      var sx = map[m].x + map[m].size + spacing;
+      var sy = map[m].y + map[m].size + spacing;
+      var test =
+        IsInRect(this,
+          map[m].x - spacing, map[m].y - spacing, sx, sy);
+      if (test) {
+        this.exist = false;
+      }
+    }
+    for (var e in enemies) {
+      var en = enemies[e];
+      if (!IsOnScreen(en.x, en.y) ||
+        !enemies[e].exist) continue;
+      var dist = Dist(this.x, this.y, en.x, en.y);
+      if (dist < en.size) {
+        this.exist = false;
+        if (this.type == 0) en.health -= 6;
+        else en.health -= 2;
+        
+        break;
+      }
+    }
+  }
+
+}
+
+function MissileClass(x, y, ang, n) {
+  this.x = x;
+  this.y = y;
+  this.ang = ang;
+  this.speed = 3 * k;
+  this.w = 10 * k;
+  this.h = 20 * k;
+  this.power = n / 2;
+  this.exist = true;
+  this.move = function() {
+    this.x += Math.sin(this.ang) * this.speed;
+    this.y += Math.cos(this.ang) * this.speed;
+  }
+  this.render = function() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate((π - this.ang) + π / 2);
+    ctx.drawImage(missileImg, -this.w / 2, -this.h / 2,
+      this.w, this.h);
+    ctx.restore();
+  }
+  this.checkCollisions = function() {
+    for (var m in map) {
+      if (!IsOnScreen(map[m].x, map[m].y) ||
+        map[m].t == "*" || map[m].t == "." || map[m].t == "-"
+      ) continue;
+      var spacing = 5 * k;
+      var sx = map[m].x + map[m].size + spacing;
+      var sy = map[m].y + map[m].size + spacing;
+      var test =
+        IsInRect(this,
+          map[m].x - spacing, map[m].y - spacing, sx, sy);
+      if (test) {
+        this.exist = false;
+        return;
+      }
+    }
+    var dist = Dist(this.x, this.y, player.x, player.y);
+    if (dist < player.size / 2) {
+      this.exist = false;
+      player.hit(this.power);
+    }
+  }
+}
+
+
+
+
+function JoystickClass(x, y, s, t) {
+  this.x = x * k;
+  this.y = y * k;
+  this.s = s * k;
+  this.ox = x * k;
+  this.oy = y * k;
+  this.os = s / 2 * k;
+  this.t = t;
+  this.render = function() {
+    ctx.save();
+    ctx.beginPath();
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = "#aaaaaa";
+    ctx.arc(this.x, this.y, this.s, 0, π);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.lineWidth = 2;
+    if (this.t == 0)
+      ctx.fillStyle = "#3333ff";
+    else if (this.t == 1) ctx.fillStyle = "#ff3333";
+    ctx.arc(this.ox, this.oy, this.os, 0, π);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+
+function CameraClass(x, y) {
+  this.ox = x * k;
+  this.oy = y * k;
+  this.x = x * k;
+  this.y = y * k;
+  this.update = function() {
+    ctx.translate(-player.x + this.x, -player.y + this.y);
+  }
+}
+
+function MapClass(x, y, t, s) {
+  this.x = x * k;
+  this.y = y * k;
+  this.size = s * k;
+  this.t = t;
+  this.render = function() {
+    ctx.beginPath();
+    ctx.lineWidth = 2;
+    if (this.t == ".")
+      ctx.fillStyle = "red";
+    else if (this.t == "+")
+      ctx.fillStyle = "#ff6666";
+    else if (this.t == "*" || this.t == "-")
+      ctx.fillStyle = "grey";
+    ctx.rect(this.x, this.y, this.size, this.size);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+
+function ExplodeClass(x, y, s) {
+  this.x = x;
+  this.y = y;
+  this.s = s;
+  this.sx = 0;
+  this.sy = 0;
+  this.incX = 63.1;
+  this.incY = 64;
+  this.exist = true;
+  this.frame = 0;
+  this.render = function() {
+    ctx.drawImage(explosionImg,
+      this.sx, this.sy, 67, 67, this.x, this.y, this.s, this.s);
+  }
+  this.newFrame = function() {
+    this.frame += 0.5;
+    if (this.frame % 4 == 0) {
+      this.sx = 0;
+      this.sy += this.incY;
+    }
+    if (this.frame == 23) {
+      this.exist = false;
+    }
+    if (this.frame % 1 == 0)
+      this.sx += this.incX;
+  }
+}
+
+function SwitchClass(x, y, s) {
+  this.x = x * k;
+  this.y = y * k;
+  this.w = s * 2 * k;
+  this.h = s * k;
+  this.render = function() {
+    ctx.beginPath();
+    ctx.fillStyle = "yellow"
+    ctx.rect(this.x, this.y, this.w, this.h);
+    ctx.fill();
+    ctx.stroke()
+    ctx.beginPath();
+    ctx.fillStyle = "white"
+    ctx.rect(this.x, this.y + this.h + 4 * k, 60 * k, 10 * k);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.fillStyle = "green"
+    ctx.rect(this.x, this.y + this.h + 4 * k,
+      player.gunReload * 6 * k, 10 * k);
+    ctx.fill();
+    ctx.font = this.h * 0.6 + "px georgia";
+    ctx.fillText("🔫🔄", this.x + 5 * k, this.y + 20 * k);
+  }
+
+}
+
+function PickUpClass(x,y,s){
+this.x=x;
+this.y=y;
+this.size=s;
+this.exist=true;
+this.render=function(){
+    ctx.font = this.size * 0.8 + "px georgia";
+    ctx.fillText("⚙️",x,y);
+}
+}
+
+;(HowToPlay = function() {
+ongoingTouches = [];
+  alert("Thanks to burey\'s help you can now control two joysticks at a time\n\nThis Game requires repetitive playing and mastery to finalize\n\nYour mission is simple..you have a soldier..eliminate every polygonal tank in the map to declare victory\n\nTap on the player/soldier to see 'THIS' instructions again.\n\nCamera:\nswipe or move across the screen to move camera\n\nBlocks:\nReddish blocks represent walls.grey blocks represent open floor\n\nHealth-kit:\nHealth-kit\'s are now created when you destroy eight sides enemies.collect them to boost your health.\n\nJoysticks:\nthere are two joysticks.The red one at the middle is for shooting in a particular direction.The blue at your right is for moving in a direction.\n\nWeapons:\nYou have two weapons.pistols,rifle.rifles deal way more damage than pistols.but rifles have to load sometimes.Tap the yellow rectangular bar at the right to switch weapons\n\nHints:\n#1:Dont shoot at tanks in open spaces,hide behind walls for cover e.t.c\n#2:The more sides a polygonal tank has,the more damage it deals\n#3:Your general movement direction should be upward/north\n  Goodluck->Hope You Never Destroy All The Tanks");
+}
+)();
+
+
+
+
+
+
+
+
+function GameOver() {
+  var restart = "<div id='restart' onclick='RestartGame()'>restart</div>"
+  alertDom.style.display = "block";
+  alertDom.innerHTML =
+    "You lost<br>Killcount:" + killCount + " out of "+enemies.length+"<br>time:" + ~~gameTimer + " seconds🕑" + restart;
+  gamePlay = false;
+}
+
+function GameWon() {
+  var restart = "<div id='restart' onclick='RestartGame()'>restart</div>"
+  alertDom.style.display = "block";
+  alertDom.innerHTML =
+    "You Won🎂🎂<br>Killcount:" + killCount + " out of "+enemies.length+"<br>time:" + ~~gameTimer + " seconds🕑" + restart;
+  gamePlay = false;
+}
+
+function RestartGame() {
+  alertDom.style.display = "none";
+  enemies = [];
+  explosions = [];
+  map = [];
+  killCount = 0;
+  gameTimer = 0;
+  player = new PlayerClass(160, 1600);
+  switchButton = new SwitchClass(30, 370, 30);
+  camera = new CameraClass(160, 300, 50);
+  initMap(mapsheet);
+  initEnemies();
+  resetTouch();
+  gamePlay = true;
+  RenderAll();
+  BulletTimer();
+}
+
+function RenderAll() {
+
+  if (!gamePlay) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  camera.update();
+
+  for (var m in map) {
+    if (!IsOnScreen(map[m].x, map[m].y)) continue;
+    map[m].render();
+  }
+
+  for (var b in player.bullets) {
+    var bullet = player.bullets[b];
+    bullet.render();
+    bullet.move();
+    bullet.checkCollisions();
+    var dist =
+      Dist(player.x, player.y, bullet.x, bullet.y);
+    if (dist > 300 * k || !bullet.exist)
+      player.bullets.splice(b, 1);
+  }
+
+  for (var e in enemies) {
+    if (!IsOnScreen(enemies[e].x, enemies[e].y) ||
+      !enemies[e].exist
+    ) continue;
+    
+    
+    for (var em in enemies[e].missiles) {
+      var m = enemies[e].missiles[em];
+      m.render();
+      m.move();
+      m.checkCollisions();
+      var dist =
+        Dist(m.x, m.y, enemies[e].x, enemies[e].y);
+      if (m.exist == false || dist > 300 * k) {
+        enemies[e].missiles.splice(m, 1);
+      }
+    }
+    enemies[e].render();
+    enemies[e].checkSight();
+    if (enemies[e].isInSight) {
+      enemies[e].ang = π - Ang(
+        player.x, player.y, enemies[e].x, enemies[e].y);
+    }
+    if (enemies[e].health < 1) {
+      map[enemies[e].refMap].t = "*"
+      enemies[e].exist = false;
+      explosions.push(new ExplodeClass(
+        enemies[e].x - enemies[e].size,
+        enemies[e].y - enemies[e].size,
+        enemies[e].size * 2));
+      if(enemies[e].sides>7){
+          pickUps.push(new PickUpClass(
+        enemies[e].x-15*k,enemies[e].y+10*k,30*k
+          ));
+      }
+      if (player.health < 95)
+        player.health += 5;
+    
+      killCount++;
+      }
+      
+      
+
+  }
+
+  for (var i in explosions) {
+    if (!explosions[i].exist) {
+      explosions.splice(i, 1);
+      continue;
+    }
+    else if(!IsOnScreen(explosions[i].x, explosions[i].y)){
+    continue;
+    }
+    explosions[i].newFrame();
+    explosions[i].render();
+
+  }
+  for(var p in pickUps){
+    if(!pickUps[p].exist) {
+       pickUps.splice(p,1);
+       continue ;
+       }
+    else if(
+    !IsOnScreen(pickUps[p].x,pickUps[p].y)||
+    player.health>95
+     )
+    {
+        continue;
+    }
+    pickUps[p].render();
+  }
+  player.render();
+  ctx.restore();
+
+for(var i = 0; i < ongoingTouches.length; i++){
+    var t = ongoingTouches[i];
+  if (t.isControl) {
+    player.move();
+    player.checkCollisions();
+  }
+  }
+  joystick.render();
+  joystick2.render();
+  switchButton.render();
+  player.renderHealth(10 * k, 10);
+
+
+  if (player.health < 0)
+    GameOver();
+
+  else if (killCount == enemies.length)
+    GameWon();
+
+
+  window.requestAnimationFrame(RenderAll);
+}
+
+
+
+
+function BulletTimer() {
+  if (!gamePlay) return;
+  gameTimer += 0.3;
+  if (!player.canUseGun) {
+    if (player.gunReload > 10) {
+      player.gunReload = 10;
+      player.canUseGun = true
+    } else player.gunReload += 0.05;
+  }
+
+  if (player.imgState == 0 && player.canUseGun == false) {
+    window.setTimeout(BulletTimer, 300);
+    return;
+  }
+for(var i = 0; i < ongoingTouches.length; i++){
+    var t = ongoingTouches[i];
+  if (t.isShoot && t.canShoot &&
+    player.bullets.length < 4) {
+    var extraAng = -0.27;
+    var x =
+      Math.sin(player.ang + extraAng) * player.size / 2 + player.x;
+    var y =
+      Math.cos(player.ang + extraAng) * player.size / 2 + player.y;
+    player.bullets.push(
+      new BulletClass(x, y, player.ang,
+        player.imgState));
+    if (player.imgState == 0) {
+      if (player.canUseGun) {
+        player.gunReload -= 1;
+      } else {
+        resetTouch();
+        player.imgState = 1;
+      }
+      if (player.gunReload == 0)
+        player.canUseGun = false
+    }
+  }
+}
+  for (var e in enemies) {
+    var en = enemies[e];
+    if (!IsOnScreen(en.x, en.y) || !en.exist ||
+      !en.isInSight || en.missiles.length > 0) continue;
+    en.timer++;
+    if (en.timer % 3 != 0) continue;
+    en.missiles.push(
+      new MissileClass(en.x, en.y, π - en.ang, en.sides));
+  }
+
+
+
+
+  window.setTimeout(BulletTimer, 300);
+
+}
+
+
+
+function switchGun() {
+  player.imgState = (++player.imgState) % 2;
+
+}
+
+
+window.onload = function() {
+  if (w > h) {
+    alert("Oops this game has no PC support..");
+    return;
+  }
+  alertDom = document.querySelector("#alertDom");
+  canvas = document.querySelector("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  ctx = canvas.getContext("2d");
+var on=window.addEventListener;
+       on("touchstart", startTouch);
+       on("touchmove", startMove);
+       on("touchend", endMove);
+  RenderAll();
+  BulletTimer();
+
+}
+
+
+/**
+returns the index of the touch by it's id from the global ongoing touches array
+*/
+function getTouchIndex(id){
+    for(var i = 0; i < ongoingTouches.length; i++){
+        var t = ongoingTouches[i];
+        if(t.id === id){
+            return i;
+        }
+    }
+}
+
+function startTouch(e) {
+if(!gamePlay) return;
+// iterate on all touches
+for(var i = 0; i < e.changedTouches.length; i++){
+// initialize new touch object
+  var t = {};
+  t.id = e.changedTouches[i].identifier;
+  t.x = ~~e.changedTouches[i].pageX;
+  t.y = ~~e.changedTouches[i].pageY;
+  var dist =
+    Dist(t.x, t.y, joystick.x, joystick.y);
+  var dist2 =
+    Dist(t.x, t.y, joystick2.x, joystick2.y);
+  var dist3 =
+    Dist(t.x, t.y, camera.x, camera.y);
+  var sx = switchButton.x + switchButton.w;
+  var sy = switchButton.y + switchButton.h;
+  if (dist < joystick.s)
+    t.isControl = true;
+  else if (dist2 < joystick2.s)
+    t.isShoot = true;
+  else if (t.x > switchButton.x && t.x < sx &&
+    t.y > switchButton.y && t.y < sy)
+    switchGun();
+  else if (dist3 < player.size)
+    HowToPlay();
+  else if (e.changedTouches.length == 1)
+    t.isMoveCamera = true;
+// add the touch object to the ongoing touches array
+ongoingTouches.push(t);
+}
+}
+
+function startMove(e) {
+if(!gamePlay) return;
+for(var i = 0; i < e.changedTouches.length; i++){
+// find the relevant touch in the ongoing touches array (match by id)
+  var touchIndex = getTouchIndex(e.changedTouches[i].identifier);
+  var t = ongoingTouches[touchIndex];
+  // update the ongoing touch
+  t.ex = ~~e.changedTouches[i].pageX;
+  t.ey = ~~e.changedTouches[i].pageY;
+  // act upon touch data which was initialized in the startTouch function
+  if (t.isControl) {
+    playerMove(t, joystick);
+  } else if (t.isShoot) {
+    playerShoot(t, joystick2);
+  } else if (t.isMoveCamera)
+    moveCamera(e.changedTouches, t, camera);
+}
+}
+
+function playerMove(t, j) {
+  var dist =
+    Dist(t.ex, t.ey, j.x, j.y);
+  var ang =
+    Ang(t.ex, t.ey, j.x, j.y);
+  if (dist < j.s / 2) {
+    j.ox = t.ex;
+    j.oy = t.ey;
+  } else {
+    j.ox = Math.sin(ang) * j.s / 2 + j.x;
+    j.oy = Math.cos(ang) * j.s / 2 + j.y;
+  }
+  // check if there is a shooting touch present
+  var isShoot = false;
+  for(var i = 0; i < ongoingTouches.length; i++){
+    var t = ongoingTouches[i];
+    if(t.isShoot){
+        isShoot = true;
+    }
+}
+// skip angle update for player movement if there is a shoot touch (user ongoing touch on shoot joystick)
+// this will prevent the player from rapidly switching angles when both joysticks are in use and gives priority to the shoot joystick angle
+if(!isShoot){
+  player.ang = ang;
+}
+
+  player.vx = Math.sin(ang) * player.speed;
+  player.vy = Math.cos(ang) * player.speed;
+}
+
+function playerShoot(t, j) {
+  var dist =
+    Dist(t.ex, t.ey, j.x, j.y);
+  var ang =
+    Ang(t.ex, t.ey, j.x, j.y);
+  if (dist < j.s) {
+    j.ox = t.ex;
+    j.oy = t.ey;
+  } else {
+    j.ox = Math.sin(ang) * j.s + j.x;
+    j.oy = Math.cos(ang) * j.s + j.y;
+  }
+  player.ang = ang + π / 2;
+  
+  if (dist > j.s )
+    t.canShoot = true
+  else t.canShoot = false;
+}
+
+function moveCamera(ev, t, c) {
+  if (ev.length != 1) return;
+  var x = t.ex - t.x;
+  var y = t.ey - t.y;
+  if (c.x < 30 * k || c.x > 270 * k ||
+    c.y < 30 * k || c.y > 400 * k) {
+    c.x = c.ox;
+    c.y = c.oy;
+    resetTouch();
+    return;
+  }
+  c.x += x / 30;
+  c.y += y / 30;
+}
+
+function endMove(e) {
+for(var i = 0; i < e.changedTouches.length; i++){
+    // find which touch was ended and remove it corresponding touch from the ongoing touches array
+    var touchIndex = getTouchIndex(e.changedTouches[i].identifier);
+    ongoingTouches.splice(touchIndex, 1);
+}
+if(!gamePlay) return;
+  resetTouch();
+}
+
+function resetTouch() {
+// since touch object is now obsolete, only reset the joysticks state
+// possible improvement: reset individual joystick if there are no move touches or shoot touches
+  /*touch.x = NaN;
+  touch.y = NaN;
+  touch.ex = NaN;
+  touch.ey = NaN;*/
+  joystick.ox = joystick.x;
+  joystick.oy = joystick.y;
+  joystick2.ox = joystick2.x;
+  joystick2.oy = joystick2.y;
+  /*touch.isControl = false;
+  touch.isShoot = false;
+  touch.canShoot = false;
+  touch.isMoveCamera = false;*/
+}
+
+
+
+function Rand(min, max) {
+  return Math.floor(Math.random() * (max - min) + min);
+}
+
+function Ang(a, b, c, d) {
+  return Math.atan2(a - c, b - d);
+}
+
+function Dist(a, b, c, d) {
+  var x = a - c;
+  var y = b - d;
+  return Math.sqrt(x * x + y * y);
+}
+
+function IsInRect(obj, x, y, x2, y2) {
+  if (obj.x > x && obj.x < x2 &&
+    obj.y > y && obj.y < y2) {
+    return true;
+  } else return false
+}
+
+function IsOnScreen(x, y) {
+  if (
+    x < (player.x - camera.x - 150 * k) ||
+    x > (player.x + (w - camera.x + 100 * k)) ||
+    y < (player.y - camera.y - 150 * k) ||
+    y > (player.y + (h - camera.y + 100 * k)))
+    return false;
+  else return true;
+}
+CanvasRenderingContext2D.prototype.drawPolygon = function(x, y, s, n) {
+  var ang = 0;
+  var angInc = π / n;
+  for (var i = 0; i < n + 1; i++) {
+    var a = Math.sin(ang) * s + x;
+    var b = Math.cos(ang) * s + y;
+    ctx.lineTo(a, b);
+    ang += angInc;
+  }
+}
+</script>
